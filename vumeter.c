@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
         if (have_new_data) {
             buf_index = vis_mmap->buf_index;
             // calculate rms over buffer
-            calc_rms(vis_mmap->buffer, vis_mmap->buf_size / 4, &rms_l, &rms_r);
+            calc_rms(vis_mmap->buffer, vis_mmap->buf_size / 2, &rms_l, &rms_r);
             // average rms value
             l += (rms_l - l) / 2;
             r += (rms_r - r) / 2;
