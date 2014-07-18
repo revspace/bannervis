@@ -72,13 +72,13 @@ static void calc_rms(s16_t *buf, int samples, int *rms_l, int *rms_r)
 {
     s16_t l,r;
     int i;
-    long int suml = 0;
-    long int sumr = 0;
+    int suml = 0;
+    int sumr = 0;
     for (i = 0; i < samples; i += 2) {
         l = buf[i];
         r = buf[i+1];
-        suml += (l * l);
-        sumr += (r * r);
+        suml += (l * l) >> 16;
+        sumr += (r * r) >> 16;
     }
     if (samples > 0) {
         suml /= samples;
@@ -88,8 +88,8 @@ static void calc_rms(s16_t *buf, int samples, int *rms_l, int *rms_r)
         sumr = 0;
     }
     
-    *rms_l = sqrt(suml);
-    *rms_r = sqrt(sumr);
+    *rms_l = sqrt(suml << 8);
+    *rms_r = sqrt(sumr << 8);
 }
 
 // outputs a frame to stdout
@@ -137,7 +137,7 @@ static void vu_pixel(uint8_t frame[HEIGHT][WIDTH][3], int x, int c)
 // maps rms value to bitmap size
 static int map(int rms)
 {
-    int v = rms / 20;
+    int v = rms / 8;
     if (v >= (WIDTH-1)) {
         v = WIDTH-1;
     }
