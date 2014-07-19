@@ -41,6 +41,9 @@ static struct vis_t {
 #define WIDTH 80
 #define HEIGHT 8
 
+// number of audio samples used for one video frame
+#define AUDIO_FRAME   16*WIDTH*2
+
 // mmap the file
 static void do_mmap(const char *filename)
 {
@@ -76,6 +79,17 @@ static void output(uint8_t frame[HEIGHT][WIDTH][3], int size)
 #define MIN(x,y) ((x)<(y)?(x):(y))
 #define MAX(x,y) ((x)>(y)?(x):(y))
 
+// fixes an offset x in the visualisation buffer to the range 0..VIS_BUF_SIZE-1
+static int fix_offset(int offset)
+{
+    offset = (offset + VIS_BUF_SIZE) % VIS_BUF_SIZE;
+    if (offset < 0) {
+        offset += VIS_BUF_SIZE;
+    }
+    return offset;
+}
+
+// draws a waveform pixel, clipping the coordinate and saturating the colour as needed
 static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int x, int y, int r, int g, int b)
 {
     int h;
@@ -92,32 +106,62 @@ static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int x, int y
     frame[h][x][2] = MIN(bb, 255);
 }
 
-// draw a waveform
-static void draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int samples)
+// finds the piece of audio in buf that best matches the audio in prv
+static int find_match(s16_t *prv, s16_t *buf)
 {
-
-    memset(frame, 0, WIDTH*HEIGHT*3);
-    
-    int l, r, m;
-    int x = 0;
-    int t = 0;
-    int i;
-    for (i = 0; i < samples; i += 2) {
-        l = buf[i];
-        r = buf[i+1];
-        m = r + l;
-
-        x = t++ / 32;
-        if (x == WIDTH) {
-            break;
+    int i, j;
+    int sum;
+    int sum_max = 0;
+    int shift = 0;
+    int m1, m2;
+    // iterate over all shifts
+    for (i = 0; i < AUDIO_FRAME; i += 2) {
+        // integrate for cross-correlation
+        sum = 0;
+        for (j = 0; j < AUDIO_FRAME; j += 32) {
+            m1 = prv[j] + prv[j + 1];
+            m2 = buf[j + i] + buf[j + i + 1];
+            sum += (m1 * m2) >> 16;
         }
+        // keep track of max correlation
+        if (sum > sum_max) {
+            sum_max = sum;
+            shift = i;
+        }
+    }
+    return shift;
+}
+
+// draws a waveform
+static void draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf)
+{
+    static s16_t prv[AUDIO_FRAME];
+
+    // find best shift that matches the previous waveform to the current one
+    int shift;
+    shift = find_match(prv, buf);
+    
+    // copy matched buffer
+    int j;
+    for (j = 0; j < AUDIO_FRAME; j += 2) {
+        prv[j] = buf[j + shift];
+        prv[j + 1] = buf[j + shift + 1];
+    }
+
+    // draw
+    int l, r, m;
+    int i;
+    for (i = 0; i < AUDIO_FRAME; i += 2) {
+        l = prv[i];
+        r = prv[i + 1];
+        m = r + l;
         
-        draw_pixel(frame, m, x, 0, 10, 20, 30);
-//        draw_pixel(frame, l, x, -2, 20, 0, 0);
-//        draw_pixel(frame, -d, x, 0, 0, 20, 0);
-//        draw_pixel(frame, r, x, +2, 0, 0, 20);
+        draw_pixel(frame, m, i / 32, 0, 15, 30, 15);
     }
 }
+
+static uint8_t banner[HEIGHT][WIDTH][3];
+static s16_t buffer[VIS_BUF_SIZE];
 
 // argv[1] = name of /dev/shm file created by squeezelite
 int main(int argc, char *argv[])
@@ -125,8 +169,10 @@ int main(int argc, char *argv[])
     (void)argc;
     (void)argv;
     
-    uint8_t banner[HEIGHT][WIDTH][3];
-
+    time_t now;
+    time_t then = time(NULL);
+    int fps = 0;
+    
     // mmap file
     const char *filename = "/dev/shm/squeezelite-00:21:00:02:cc:45";
     if (argc > 1) {
@@ -142,12 +188,17 @@ int main(int argc, char *argv[])
         pthread_rwlock_rdlock(&vis_mmap->rwlock);
 #endif
 
-        // process
-        bool have_new_data = (vis_mmap->buf_index != buf_index);
+        // check for data available
+        int avail = fix_offset(vis_mmap->buf_index - buf_index);
+        bool have_new_data = (avail >= AUDIO_FRAME);
         if (have_new_data) {
-            buf_index = vis_mmap->buf_index;
-            // calculate rms over buffer
-            draw_wave(banner, vis_mmap->buffer, vis_mmap->buf_size / 2);
+            // unwrap buffer
+            int i;
+            for (i = 0; i < VIS_BUF_SIZE; i++) {
+                buffer[i] = vis_mmap->buffer[fix_offset(buf_index + i - AUDIO_FRAME)];
+            }
+            // update our read index
+            buf_index = fix_offset(buf_index + AUDIO_FRAME);
         }
         
 #ifdef USE_LOCKS
@@ -157,11 +208,22 @@ int main(int argc, char *argv[])
 
         // update led banner
         if (have_new_data) {
+            memset(banner, 0, sizeof(banner));
+            draw_wave(banner, buffer);
             output(banner, sizeof(banner));
+            fps++;
+        }
+        
+        // stats
+        now = time(NULL);
+        if (now != then) {
+            fprintf(stderr, "fps=%d\n", fps);
+            then = now;
+            fps = 0;
         }
         
         // wait some time
-        usleep(5000);
+        usleep(1000);
     }
 
     return 0;
