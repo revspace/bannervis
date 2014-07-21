@@ -42,7 +42,7 @@ static struct vis_t {
 #define HEIGHT 8
 
 // number of audio samples used for one video frame
-#define AUDIO_FRAME   16*WIDTH*2
+#define AUDIO_FRAME   (16*WIDTH*2)
 
 // mmap the file
 static void do_mmap(const char *filename)
@@ -90,11 +90,16 @@ static int fix_offset(int offset)
 }
 
 // draws a waveform pixel, clipping the coordinate and saturating the colour as needed
-static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int x, int y, int r, int g, int b)
+static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int scale, int x, int y, int r, int g, int b)
 {
     int h;
     
-    h = (HEIGHT - 1 + (sample / 512)) / 2 + y;
+    if (scale != 0) {
+        sample = (sample * 512) / scale;
+    } else {
+        sample /= 512;
+    }
+    h = (HEIGHT + sample - 1) / 2 + y;
     h = MAX(h, 0);
     h = MIN(h, HEIGHT - 1);
     int rr = frame[h][x][0] + r;
@@ -110,8 +115,8 @@ static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int x, int y
 static int find_match(s16_t *prv, s16_t *buf)
 {
     int i, j;
-    int sum;
-    int sum_max = 0;
+    long int sum;
+    long int sum_max = 0;
     int shift = 0;
     int m1, m2;
     // iterate over all shifts
@@ -121,7 +126,7 @@ static int find_match(s16_t *prv, s16_t *buf)
         for (j = 0; j < AUDIO_FRAME; j += 32) {
             m1 = prv[j] + prv[j + 1];
             m2 = buf[j + i] + buf[j + i + 1];
-            sum += (m1 * m2) >> 16;
+            sum += (m1 * m2);
         }
         // keep track of max correlation
         if (sum > sum_max) {
@@ -133,7 +138,7 @@ static int find_match(s16_t *prv, s16_t *buf)
 }
 
 // draws a waveform
-static void draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf)
+static int draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int scale)
 {
     static s16_t prv[AUDIO_FRAME];
 
@@ -156,8 +161,17 @@ static void draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf)
         r = prv[i + 1];
         m = r + l;
         
-        draw_pixel(frame, m, i / 32, 0, 15, 30, 15);
+        draw_pixel(frame, m, scale, i / 32, 0, 15, 30, 15);
     }
+
+    // calculate RMS of left and right signal
+    long int sum = 0;
+    for (j = 0; j < AUDIO_FRAME; j++) {
+        m = prv[j];
+        sum += (m * m);
+    }
+    int rms = sqrt(sum / AUDIO_FRAME);
+    return rms;
 }
 
 static uint8_t banner[HEIGHT][WIDTH][3];
@@ -173,6 +187,8 @@ int main(int argc, char *argv[])
     time_t then = time(NULL);
     int fps = 0;
     
+    int rms_avg = 1;
+
     // mmap file
     const char *filename = "/dev/shm/squeezelite-00:21:00:02:cc:45";
     if (argc > 1) {
@@ -200,7 +216,7 @@ int main(int argc, char *argv[])
             // update our read index
             buf_index = fix_offset(buf_index + AUDIO_FRAME);
         }
-        
+
 #ifdef USE_LOCKS
         // unlock
         pthread_rwlock_unlock(&vis_mmap->rwlock);
@@ -209,7 +225,11 @@ int main(int argc, char *argv[])
         // update led banner
         if (have_new_data) {
             memset(banner, 0, sizeof(banner));
-            draw_wave(banner, buffer);
+            int rms = 256 * draw_wave(banner, buffer, rms_avg);
+
+            // smooth rms over time
+            rms_avg += (rms - rms_avg + 16) / 32;
+
             output(banner, sizeof(banner));
             fps++;
         }
@@ -217,7 +237,7 @@ int main(int argc, char *argv[])
         // stats
         now = time(NULL);
         if (now != then) {
-            fprintf(stderr, "fps=%d\n", fps);
+            fprintf(stderr, "fps=%d, rms=%6d\n", fps, rms_avg);
             then = now;
             fps = 0;
         }
