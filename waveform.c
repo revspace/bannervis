@@ -192,11 +192,9 @@ static uint8_t banner[HEIGHT][WIDTH][3];
 static s16_t buffer[VIS_BUF_SIZE];
 
 // argv[1] = name of /dev/shm file created by squeezelite
+// argv[2] = number of seconds to run (if not present: forever)
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
-    
     time_t now;
     time_t then = time(NULL);
     int fps = 0;
@@ -210,6 +208,13 @@ int main(int argc, char *argv[])
     }
     if (!do_mmap(filename)) {
         exit(-1);
+    }
+
+    // max runtime
+    int seconds = 0;
+    int runtime = 0;
+    if (argc > 2) {
+        runtime = atoi(argv[2]);
     }
     
     u32_t buf_index = 0;
@@ -256,8 +261,14 @@ int main(int argc, char *argv[])
             fprintf(stderr, "fps=%d, rms=%6d\n", fps, rms_avg);
             then = now;
             fps = 0;
+            seconds++;
         }
-        
+
+        // check max runtime
+        if ((runtime > 0) && (seconds > runtime)) {
+            break;
+        }
+
         // wait some time
         usleep(1000);
     }

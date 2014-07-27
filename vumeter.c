@@ -195,11 +195,9 @@ static void draw_vu(uint8_t frame[HEIGHT][WIDTH][3], int l, int r)
 }
 
 // argv[1] = name of /dev/shm file created by squeezelite
+// argv[2] = number of seconds to run (if not present: forever)
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
-    
     uint8_t banner[HEIGHT][WIDTH][3];
 
     // mmap file
@@ -211,6 +209,17 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     
+    // max runtime
+    int seconds = 0;
+    int runtime = 0;
+    if (argc > 2) {
+        runtime = atoi(argv[2]);
+    }
+
+    time_t now;
+    time_t then = time(NULL);
+    int fps = 0;
+
     u32_t buf_index = 0;
     
     int rms_l, rms_r;
@@ -242,8 +251,23 @@ int main(int argc, char *argv[])
         if (have_new_data) {
             draw_vu(banner, l, r);
             output(banner, sizeof(banner));
+            fps++;
         }
         
+        // stats
+        now = time(NULL);
+        if (now != then) {
+            fprintf(stderr, "fps=%d\n", fps);
+            then = now;
+            fps = 0;
+            seconds++;
+        }
+
+        // check max runtime
+        if ((runtime > 0) && (seconds > runtime)) {
+            break;
+        }
+
         // wait some time
         usleep(10000);
     }
