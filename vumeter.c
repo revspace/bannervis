@@ -27,7 +27,7 @@
 #define HEIGHT 8
 
 // mmap the file
-static void do_mmap(const char *filename)
+static bool do_mmap(const char *filename)
 {
     int vis_fd;
     
@@ -38,7 +38,7 @@ static void do_mmap(const char *filename)
 #endif
     if (vis_fd <= 0) {
         perror("open failed!\n");
-        exit(-1);
+        return false;
     }
 
 #if USE_LOCKS
@@ -48,8 +48,10 @@ static void do_mmap(const char *filename)
 #endif
 	if (vis_mmap == MAP_FAILED) {
 	    perror("mmap failed!\n");
-        exit(-1);
+	    return false;
 	}
+
+	return true;
 }
 
 // calculates rms values for left and right channel (0..32768)
@@ -205,7 +207,9 @@ int main(int argc, char *argv[])
     if (argc > 1) {
         filename = argv[1];
     }
-    do_mmap(filename);
+    if (!do_mmap(filename)) {
+        exit(-1);
+    }
     
     u32_t buf_index = 0;
     

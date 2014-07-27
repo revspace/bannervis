@@ -28,7 +28,7 @@
 #define AUDIO_FRAME   (16*WIDTH*2)
 
 // mmap the file
-static void do_mmap(const char *filename)
+static bool do_mmap(const char *filename)
 {
     int vis_fd;
     
@@ -39,7 +39,7 @@ static void do_mmap(const char *filename)
 #endif
     if (vis_fd <= 0) {
         perror("open failed!\n");
-        exit(-1);
+        return false;
     }
 
 #if USE_LOCKS
@@ -48,9 +48,11 @@ static void do_mmap(const char *filename)
     vis_mmap = (struct vis_t *)mmap(0, sizeof(struct vis_t), PROT_READ, MAP_SHARED, vis_fd, 0);
 #endif
 	if (vis_mmap == MAP_FAILED) {
-	    perror("mmap failed!\n");
-        exit(-1);
+        perror("mmap failed!\n");
+        return false;
 	}
+
+	return true;
 }
 
 // outputs a frame to stdout
@@ -206,7 +208,9 @@ int main(int argc, char *argv[])
     if (argc > 1) {
         filename = argv[1];
     }
-    do_mmap(filename);
+    if (!do_mmap(filename)) {
+        exit(-1);
+    }
     
     u32_t buf_index = 0;
     
