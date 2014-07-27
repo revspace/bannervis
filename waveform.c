@@ -38,7 +38,7 @@ static bool do_mmap(const char *filename)
     vis_fd = open(filename, O_RDONLY, 0);
 #endif
     if (vis_fd <= 0) {
-        perror("open failed!\n");
+        perror("open failed");
         return false;
     }
 
@@ -48,7 +48,7 @@ static bool do_mmap(const char *filename)
     vis_mmap = (struct vis_t *)mmap(0, sizeof(struct vis_t), PROT_READ, MAP_SHARED, vis_fd, 0);
 #endif
 	if (vis_mmap == MAP_FAILED) {
-        perror("mmap failed!\n");
+        perror("mmap failed");
         return false;
 	}
 
