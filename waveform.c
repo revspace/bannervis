@@ -73,22 +73,15 @@ static int fix_offset(int offset)
 }
 
 // draws a waveform pixel, clipping the coordinate and saturating the colour as needed
-static void draw_pixel(uint8_t frame[HEIGHT][WIDTH], int sample, int scale, int x, int y)
+static void draw_pixel(uint8_t frame[HEIGHT][WIDTH], int sample, int x, int y)
 {
     int h;
     
-    if (scale != 0) {
-        sample = (sample * 512) / scale;
-    } else {
-        sample /= 512;
-    }
     h = (HEIGHT + sample - 1) / 2 + y;
     h = MAX(h, 0);
     h = MIN(h, HEIGHT - 1);
     
-    int i = frame[h][x] + 1;
-    i = MIN(i, 255);
-    frame[h][x] = i;
+    frame[h][x]++;
 }
 
 // finds the piece of audio in buf that best matches the audio in prv
@@ -146,7 +139,7 @@ static void render_pixel(int i, uint8_t pixel[3])
 }
 
 // draws a waveform
-static int draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int scale)
+static int draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int rms_avg)
 {
     static s16_t prv[AUDIO_FRAME];
     uint8_t intensity[HEIGHT][WIDTH];
@@ -163,15 +156,16 @@ static int draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int scale)
     }
 
     // draw as intensity map
-    int l, r, m;
+    int l, r, m, h;
     int i;
     memset(intensity, 0, sizeof(intensity));
+    int scale = (1 << 25) / rms_avg;
     for (i = 0; i < AUDIO_FRAME; i += 2) {
         l = prv[i];
         r = prv[i + 1];
         m = r + l;
-        
-        draw_pixel(intensity, m, scale, i / 32, 0);
+        h = (m * scale) >> 16;
+        draw_pixel(intensity, h, i / 32, 0);
     }
     
     // render intensity to color
