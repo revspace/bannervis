@@ -73,7 +73,7 @@ static int fix_offset(int offset)
 }
 
 // draws a waveform pixel, clipping the coordinate and saturating the colour as needed
-static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int scale, int x, int y, int r, int g, int b)
+static void draw_pixel(uint8_t frame[HEIGHT][WIDTH], int sample, int scale, int x, int y)
 {
     int h;
     
@@ -85,13 +85,10 @@ static void draw_pixel(uint8_t frame[HEIGHT][WIDTH][3], int sample, int scale, i
     h = (HEIGHT + sample - 1) / 2 + y;
     h = MAX(h, 0);
     h = MIN(h, HEIGHT - 1);
-    int rr = frame[h][x][0] + r;
-    int gg = frame[h][x][1] + g;
-    int bb = frame[h][x][2] + b;
     
-    frame[h][x][0] = MIN(rr, 255);
-    frame[h][x][1] = MIN(gg, 255);
-    frame[h][x][2] = MIN(bb, 255);
+    int i = frame[h][x] + 1;
+    i = MIN(i, 255);
+    frame[h][x] = i;
 }
 
 // finds the piece of audio in buf that best matches the audio in prv
@@ -120,10 +117,39 @@ static int find_match(s16_t *prv, s16_t *buf)
     return shift;
 }
 
+// render one pixel from intensity to an RGB value
+static void render_pixel(int i, uint8_t pixel[3])
+{
+    static uint8_t palet[][3] = {
+        { 0,  0,  0},
+        { 1,  2,  1},
+        { 2,  4,  2},
+        { 3,  6,  3},
+        { 4,  8,  4},
+        { 5, 10,  5},
+        { 6, 12,  6},
+        { 7, 14,  7},
+        { 8, 15,  8},
+        { 9, 15,  9},
+        {10, 15, 10},
+        {11, 15, 11},
+        {12, 15, 12},
+        {13, 15, 13},
+        {14, 15, 14},
+        {15, 15, 15},
+        {15, 15, 15}
+    };
+    
+    pixel[0] = 16 * palet[i][0];
+    pixel[1] = 16 * palet[i][1];
+    pixel[2] = 16 * palet[i][2];
+}
+
 // draws a waveform
 static int draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int scale)
 {
     static s16_t prv[AUDIO_FRAME];
+    uint8_t intensity[HEIGHT][WIDTH];
 
     // find best shift that matches the previous waveform to the current one
     int shift;
@@ -136,15 +162,24 @@ static int draw_wave(uint8_t frame[HEIGHT][WIDTH][3], s16_t *buf, int scale)
         prv[j + 1] = buf[j + shift + 1];
     }
 
-    // draw
+    // draw as intensity map
     int l, r, m;
     int i;
+    memset(intensity, 0, sizeof(intensity));
     for (i = 0; i < AUDIO_FRAME; i += 2) {
         l = prv[i];
         r = prv[i + 1];
         m = r + l;
         
-        draw_pixel(frame, m, scale, i / 32, 0, 15, 30, 15);
+        draw_pixel(intensity, m, scale, i / 32, 0);
+    }
+    
+    // render intensity to color
+    int x, y;
+    for (y = 0; y < HEIGHT; y++) {
+        for (x = 0; x < WIDTH; x++) {
+            render_pixel(intensity[y][x], frame[y][x]);
+        }
     }
 
     // calculate RMS of left and right signal
