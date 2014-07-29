@@ -1,3 +1,24 @@
+/**
+ * This is an audio visualisation specifically written for a 80x8 pixel RGB led banner.
+ * It reads raw audio frames from a shared-memory mmap'ed file and writes raw RGB frames to stdout.
+ *
+ * Features:
+ * - on the right, shows instantenous spectral energy
+ * - on the left, shows historic spectral energy, scrolling left
+ * - each horizontal line represents one octave, from about 43 Hz to 11025 Hz (at 44.1 kHz sample rate)
+ * - the spectrum amplitude automatically adjusts to input level, by scaling to an averaged RMS value
+ *
+ * Details:
+ * - Every time a new block of 1024 stereo samples is available, a block of 2048 samples is prepared for FFT.
+ * - The block of 2048 samples consists of 1024 previous audio samples and 1024 new audio samples, converted to mono.
+ * - A triangular windowing function is applied before converting to spectral data using a discrete fourier transform.
+ * - The spectral distribution is converted to an energy per octave, by simply summing the total energy in each octave.
+ * - An RMS value per octave is calculated by taking the square root of the energy, and scaling it to the average RMS.
+ * - The average RMS value is calculated from the instantaneous RMS by a 1-pole filter (time constant of about 1.5 s).
+ * - The value to be displayed is the square root of the RMS value (not using a log function).
+ * - For the spectrogram, the display value is mapped on a palette going from black-blue-green-yellow-red.
+ **/
+
 #include <string.h>     // memset
 #include <stdio.h>      // perror, fprintf
 #include <stdlib.h>     // exit
@@ -67,13 +88,17 @@ static void create_palet(uint8_t palet[][3])
     int t;
     for (t = 0; t < NR_COLORS; t++) {
         if (t < 60) {
+            // black to blue
             b += 2;
         } else if (t < 120) {
+            // blue to green
             b -= 2;
             g += 2;
         } else if (t < 180) {
+            // green to yellow
             r += 4;
         } else if (t < 240) {
+            // yellow to red
             g -= 2;
         }
         palet[t][0] = r;
