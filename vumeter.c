@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
     int rms_l, rms_r;
     int l = 0;
     int r = 0;
-    while (1) {
+    while (vis_mmap->running) {
 #ifdef USE_LOCKS
         // lock
         pthread_rwlock_rdlock(&vis_mmap->rwlock);

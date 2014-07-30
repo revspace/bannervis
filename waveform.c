@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
     
     u32_t buf_index = 0;
     
-    while (1) {
+    while (vis_mmap->running) {
 #ifdef USE_LOCKS
         // lock
         pthread_rwlock_rdlock(&vis_mmap->rwlock);

@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 
     u32_t buf_index = 0;
 
-    while (1) {
+    while (vis_mmap->running) {
         // check for data available
         int avail = fix_offset(vis_mmap->buf_index - buf_index);
         bool have_new_data = (avail >= AUDIO_FRAME);
