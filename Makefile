@@ -1,8 +1,8 @@
 CFLAGS = -W -Wall -O3
 LDFLAGS = -lpthread -lrt -lm -lfftw3
 
-all: vumeter waveform spectrogram
+all: vumeter waveform waveformf spectrogram
 
 clean:
-	rm -f vumeter waveform spectrogram
+	rm -f vumeter waveform waveformf spectrogram
 
