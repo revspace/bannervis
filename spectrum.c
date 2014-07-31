@@ -131,7 +131,7 @@ static double draw_spect(uint8_t frame[HEIGHT][WIDTH][3], uint8_t palet[][3], ff
     double totalsum = 0.0;
     for (x = 0; x < WIDTH; x++) {
         // calculate bin size
-        int size = pow(2.0, x / 6.0) / 100;
+        int size = pow(2.0, x / 8.0) / 20.0;
         if (size < 1) {
             size = 1;
         }
