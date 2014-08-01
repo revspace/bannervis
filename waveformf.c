@@ -97,9 +97,8 @@ static int find_match(double *prv, double *buf)
     for (i = 0; i < BUF_SIZE; i++) {
         // integrate for cross-correlation
         sum = 0;
-        for (j = 0; j < BUF_SIZE; j += 8) {
-            double m = prv[j] * buf[i + j];
-            sum += m;
+        for (j = 0; j < BUF_SIZE; j += 16) {
+            sum += prv[j] * buf[i + j];
         }
         // keep track of max correlation
         if (sum > sum_max) {
@@ -107,7 +106,6 @@ static int find_match(double *prv, double *buf)
             shift = i;
         }
     }
-//    fprintf(stderr, "shift=%4d, sum=%10.0f\n", shift, sum_max);
     return shift;
 }
 
