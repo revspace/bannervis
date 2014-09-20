@@ -26,7 +26,7 @@
 #include <sys/mman.h>   // MAP_FAILED
 #include <fcntl.h>      // open
 #include <math.h>       // log, sqrt, etc.
-
+#include <sys/time.h>
 #include "fftw3.h"
 
 #include "squeeze_vis.h"
@@ -41,6 +41,13 @@
 #define AUDIO_FRAME (FFT_N)
 
 #define CLAMP(x,min,max) ((x)<(min)?(min):(x)>(max)?(max):(x))
+
+static uint64_t utime() {
+    static struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1e6 + tv.tv_usec;
+}
+
 
 // mmap the file
 static bool do_mmap(const char *filename)
@@ -215,6 +222,8 @@ int main(int argc, char *argv[])
 
     u32_t buf_index = 0;
 
+    static uint64_t start;
+    start = utime();
     while (vis_mmap->running) {
         // check for data available
         int avail = fix_offset(vis_mmap->buf_index - buf_index);
@@ -232,7 +241,11 @@ int main(int argc, char *argv[])
         }
 
         // update led banner
-        if (have_new_data) {
+	uint64_t duration = utime() - start;
+	const float interval = 20000;
+	if (duration >= interval) {
+	    start = utime();
+
             double rms = draw_spect(banner, palette, plan, out, rms_avg);
             rms_avg += (rms - rms_avg) / 64;
             output(banner, sizeof(banner));
@@ -242,7 +255,7 @@ int main(int argc, char *argv[])
         // stats
         now = time(NULL);
         if (now != then) {
-            fprintf(stderr, "fps=%d, rms=%6d\n", fps, rms_avg);
+            // fprintf(stderr, "fps=%d, rms=%6d\n", fps, rms_avg);
             then = now;
             fps = 0;
             seconds++;
@@ -253,8 +266,7 @@ int main(int argc, char *argv[])
             break;
         }
 
-        // wait some time
-        usleep(1000);
+	usleep(100);
     }
 
     return 0;
