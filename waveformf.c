@@ -64,6 +64,16 @@ static void output(uint8_t frame[HEIGHT][WIDTH][3], int size)
 #define MIN(x,y) ((x)<(y)?(x):(y))
 #define MAX(x,y) ((x)>(y)?(x):(y))
 
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} rgb_t;
+
+typedef struct {
+    rgb_t   c[17];
+} palet_t;
+
 // fixes an offset x in the visualisation buffer to the range 0..VIS_BUF_SIZE-1
 static int fix_offset(int offset)
 {
@@ -110,35 +120,15 @@ static int find_match(double *prv, double *buf)
 }
 
 // render one pixel from intensity to an RGB value
-static void render_pixel(int i, uint8_t pixel[3])
+static void render_pixel(palet_t *palet, int i, uint8_t pixel[3])
 {
-    static uint8_t palet[17][3] = {
-        { 0,  0,  0},
-        { 1,  2,  1},
-        { 2,  4,  2},
-        { 3,  6,  3},
-        { 4,  8,  4},
-        { 5, 10,  5},
-        { 6, 12,  6},
-        { 7, 14,  7},
-        { 8, 16,  8},
-        { 9, 16,  9},
-        {10, 16, 10},
-        {11, 16, 11},
-        {12, 16, 12},
-        {13, 16, 13},
-        {14, 16, 14},
-        {15, 16, 15},
-        {16, 16, 16}
-    };
-    
-    pixel[0] = 15 * palet[i][0];
-    pixel[1] = 15 * palet[i][1];
-    pixel[2] = 15 * palet[i][2];
+    pixel[0] = palet->c[i].r;
+    pixel[1] = palet->c[i].g;
+    pixel[2] = palet->c[i].b;
 }
 
 // draws a waveform
-static double draw_wave(uint8_t frame[HEIGHT][WIDTH][3], double *buf, double rms_avg)
+static double draw_wave(uint8_t frame[HEIGHT][WIDTH][3], double *buf, palet_t *palet, double rms_avg)
 {
     static double prv[BUF_SIZE];
     uint8_t intensity[HEIGHT][WIDTH];
@@ -169,7 +159,7 @@ static double draw_wave(uint8_t frame[HEIGHT][WIDTH][3], double *buf, double rms
     int x, y;
     for (y = 0; y < HEIGHT; y++) {
         for (x = 0; x < WIDTH; x++) {
-            render_pixel(intensity[y][x], frame[y][x]);
+            render_pixel(palet, intensity[y][x], frame[y][x]);
         }
     }
 
@@ -185,6 +175,33 @@ static double draw_wave(uint8_t frame[HEIGHT][WIDTH][3], double *buf, double rms
 
 static uint8_t banner[HEIGHT][WIDTH][3];
 static double buffer[2*BUF_SIZE];
+
+// limits x to the range [min,max]
+static int limit(int x, int min, int max)
+{
+    if (x < min) {
+        return min;
+    }
+    if (x > max) {
+        return max;
+    }
+    return x;
+}
+
+// creates a smooth fading palet
+static void create_palet(palet_t *pal, rgb_t col, double scale)
+{
+    int i;
+    double r, g, b;
+    for (i = 0; i < 17; i++) {
+        r = scale * col.r * i / 16;
+        g = scale * col.g * i / 16;
+        b = scale * col.b * i / 16;
+        pal->c[i].r = limit(r, 0, 255);
+        pal->c[i].g = limit(g, 0, 255);
+        pal->c[i].b = limit(b, 0, 255);
+   }
+}
 
 // argv[1] = name of /dev/shm file created by squeezelite
 // argv[2] = number of seconds to run (if not present: forever)
@@ -211,6 +228,10 @@ int main(int argc, char *argv[])
     if (argc > 2) {
         runtime = atoi(argv[2]);
     }
+    
+    // create a palet
+    palet_t palet;
+    create_palet(&palet, (rgb_t){128, 255, 128}, 2.0);
     
     u32_t buf_index = 0;
     
@@ -242,7 +263,7 @@ int main(int argc, char *argv[])
         // update led banner
         if (have_new_data) {
             memset(banner, 0, sizeof(banner));
-            double rms = draw_wave(banner, buffer, rms_avg);
+            double rms = draw_wave(banner, buffer, &palet, rms_avg);
 
             // smooth rms over time
             rms_avg += (rms - rms_avg) / 64.0;
