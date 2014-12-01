@@ -231,7 +231,11 @@ int main(int argc, char *argv[])
     
     // create a palet
     palet_t palet;
-    create_palet(&palet, (rgb_t){128, 255, 128}, 2.0);
+    srand(time(NULL));
+    uint8_t r = random() & 255;
+    uint8_t g = random() & 255;
+    uint8_t b = random() & 255;
+    create_palet(&palet, (rgb_t){r, g, b}, 2.0);
     
     u32_t buf_index = 0;
     
