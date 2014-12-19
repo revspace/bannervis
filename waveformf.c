@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
     uint8_t r = random() & 255;
     uint8_t g = random() & 255;
     uint8_t b = random() & 255;
-    create_palet(&palet, (rgb_t){r, g, b}, 1000.0 / (r + g + b));
+    create_palet(&palet, (rgb_t){r, g, b}, 1000.0 / (r + g + b + 1));
     
     u32_t buf_index = 0;
     
